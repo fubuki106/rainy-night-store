@@ -50,3 +50,5 @@ python3 macOS/verify-character-pack.py
 ```
 
 角色校验会将打包后的 GLB 与原版的 SHA-256 对照，并逐字节核对 21 张贴图。Mac 应用不需要联网下载角色。
+
+如需对照角色的实际画面，可在装有 Chromium、Playwright 和 pngjs 的环境中运行 `node macOS/verify-original-character.cjs /tmp/rainy-original`。默认基准是原作提交 `c1038211`。脚本锁定随机数、镜头和每一帧的时长，检查待机、走路与原作手势的骨骼、表情和实像，另外测试可选反光确实只作用于主角的头发。

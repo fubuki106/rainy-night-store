@@ -45,7 +45,7 @@ body{margin:0;overflow:hidden;background:var(--night);background-image:radial-gr
 <script src="film/park-chime.js"></script>
 <script src="film/street-walk.js"></script>
 <script src="film/rain-details.js"></script>
-<script src="film/character-acting.js"></script>
+<script src="film/hair-finish.js"></script>
 <script src="film/contact-print.js"></script>
 <script src="film/last-frame.js"></script>
 <script src="film/character-loader.js"></script>
@@ -88,7 +88,8 @@ const HDR = CBF || (gl2 && !!renderer.extensions.get("EXT_color_buffer_half_floa
 const NOREF = 1;
 
 const scene = new T.Scene();
-let streetWalk = null, film = null, filmBus = null, rainDetails = null, acting = null;
+const hairFinish = window.createRainHairFinish?.() || {mode:"original",set:()=>"original",toggle:()=>"original"};
+let streetWalk = null, film = null, filmBus = null, rainDetails = null;
 scene.fog = new T.Fog(0x161d44, 20, 46);
 const camera = new T.PerspectiveCamera(30, 1, 0.04, 140);
 camera.layers.enable(NOREF);
@@ -1166,6 +1167,10 @@ float hh1( float n ){ return fract( sin( n )*43758.5453 ); }
     if(mt.tint) m.color.multiply(new T.Color().fromArray(mt.tint));
     const shade = new T.Color().fromArray(mt.shade);
     m.userData.u = {uShade: {value: shade}, uShift: {value: mt.shift}, uToony: {value: mt.toony}};
+    // Only the heroine's existing ProcHair material can opt into the softer reflection.
+    const finish = proc && opts.hairFinish?.fragment ? opts.hairFinish : null;
+    const softKey = finish ? KEY_GLSL.replace(HAIR_GLSL, finish.fragment) : null;
+    if(finish) finish.bind(m);
     m.onBeforeCompile = sh => {
       Object.assign(sh.uniforms, m.userData.u); sh.uniforms.uGI = giU; sh.uniforms.uGISat = giSatU; sh.uniforms.uLim = limU;
       sh.uniforms.uKeyDir = KEYU.kd; sh.uniforms.uKeyCol = KEYU.kc; sh.uniforms.uRimDir = KEYU.rd; sh.uniforms.uRimCol = KEYU.rc; sh.uniforms.uRimFres = {value: rimFres};
@@ -1173,9 +1178,9 @@ float hh1( float n ){ return fract( sin( n )*43758.5453 ); }
         sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nattribute vec3 aT; attribute float aR; attribute float aS; varying vec3 vHT; varying float vHR; varying float vHS;")
           .replace("#include <skinnormal_vertex>", "#include <skinnormal_vertex>\n  { vec3 hT = aT;\n  #ifdef USE_SKINNING\n    hT = ( skinMatrix * vec4( aT, 0.0 ) ).xyz;\n  #endif\n    vHT = normalize( ( modelViewMatrix * vec4( hT, 0.0 ) ).xyz ); vHR = aR; vHS = aS; }"); }
       sh.fragmentShader = sh.fragmentShader.replace("#include <lights_toon_pars_fragment>", TOON_PARS)
-        .replace("#include <common>", "#include <common>\n" + KEY_HEAD).replace("#include <lights_fragment_end>", KEY_GLSL);
+        .replace("#include <common>", "#include <common>\n" + KEY_HEAD).replace("#include <lights_fragment_end>", finish?.mode==="soft" ? softKey : KEY_GLSL);
     };
-    m.customProgramCacheKey = () => proc ? "atoon3h" : "atoon3";
+    m.customProgramCacheKey = () => proc ? (finish?.mode==="soft" ? "atoon3h:soft-v1" : "atoon3h") : "atoon3";
     return mats[name] = m;
   }
   /* inverted-hull outline; width grows a little with camera distance so it reads at every zoom; aOW masks it per vertex */
@@ -1657,7 +1662,7 @@ function installGirl(gltf,pack,stage){
         pose: () => { pm.clipAction(clip("idle")).play(); pm.clipAction(clip("armHold")).play(); pm.setTime(0); }});
       pm.stopAllAction(); pm.uncacheRoot(gltf.scene);
       meta.springs = meta.springs.concat(hair.springs); actor.hair = hair; }
-    const ch = makeAnimeChar(T, gltf, meta, {keyUniforms: KEYU, outlineScale: 2.6, hairA2C: actor.hairA2C, gi: 0.72, giSat: 0.45, rimFresnel: new T.Color(0.08, 0.1, 0.16),
+    const ch = makeAnimeChar(T, gltf, meta, {hairFinish, keyUniforms: KEYU, outlineScale: 2.6, hairA2C: actor.hairA2C, gi: 0.72, giSat: 0.45, rimFresnel: new T.Color(0.08, 0.1, 0.16),
       outlineTint: new T.Color(0x1d1a30), anisotropy: Math.min(8, renderer.capabilities.getMaxAnisotropy()), hairHighlight: new T.Color(0.17, 0.18, 0.24),
       /* nothing hidden under the cap may push its outline through it */
       outlineMask: actor.outlineMask,
@@ -1766,14 +1771,9 @@ function updateUmbDrips(dt){ for(const d of udrips){ if(!d.m.visible) continue; 
 /* gestures: tap her / space -> wave, touch the cap, twirl the umbrella */
 const GESTS = ["wave", "wink", "twirl", "touchHair"];
 let gestI = 0;
-function gesture(name,recipient){
+function gesture(name){
   if(!girl.ready || st.target || keys.size) return;
-  if(recipient==="npc"&&acting.busy)return;
   if(!name){ name = GESTS[gestI % GESTS.length]; gestI++; }
-  if(name==="wave"&&recipient!=="npc"&&acting.greet()){
-    if(st.gesture){girl.A[st.gesture].stop();st.gesture=null;st.g=0;}
-    st.smileT=0;st.idleT=0;return;
-  }
   if(name === "twirl"){ st.spinT = 0; st.smileT = 1.6; return; }
   if(name === "wink"){ st.winkT = 0; st.smileT = 1.1; return; }
   const A = girl.A; if(st.gesture && st.gesture !== name) A[st.gesture].stop();
@@ -1798,7 +1798,6 @@ function updateGirl(dt, t){
   if(st.target && mvr.want > 0.002 && mvr.moved < mvr.want*0.25){ st.stuck += dt; if(st.stuck > 0.45){ st.target = st.path && st.path.length ? st.path.shift() : null; st.stuck = 0; } } else st.stuck = 0;
   const speed = Math.hypot(st.vx, st.vz), mv = Math.min(1, speed/SPEED);
   if(speed > 0.05) st.yaw = lerpAngle(st.yaw, Math.atan2(st.vx, st.vz), 1 - Math.exp(-dt*7));
-  if(girl.ready)acting.turn(dt,speed);
   const turn = ((st.yaw - st.prevYaw + Math.PI*3) % (Math.PI*2) - Math.PI)/Math.max(dt, 1e-4); st.prevYaw = st.yaw;
   const jump = Math.hypot(girl.root.position.x - st.x, girl.root.position.z - st.z);
   girl.root.position.set(st.x, st.y, st.z); girl.root.rotation.y = st.yaw;
@@ -1808,7 +1807,6 @@ function updateGirl(dt, t){
   else marker.material.opacity = Math.max(0, marker.material.opacity - dt*3);
   if(!girl.ready) return;
   const A = girl.A, B = girl.bones;
-  acting.restore();acting.update(dt,speed);
   /* locomotion / gesture blend */
   st.mvS += (mv - st.mvS)*(1 - Math.exp(-dt*7));
   if(st.gesture){
@@ -1817,21 +1815,20 @@ function updateGirl(dt, t){
     st.g += (want - st.g)*(1 - Math.exp(-dt*(want ? 6 : 5)));
     if((st.gT > dur || mv > 0.2) && st.g < 0.02){ A[st.gesture].stop(); st.gesture = null; st.g = 0; }
   } else st.g = 0;
-  if(mv < 0.05 && !st.gesture && !acting.busy){ st.idleT += dt; if(st.idleT > 13 + Math.random()*0.5){ st.idleT = 0; const r = Math.random(); if(r < 0.5) gesture("lookAround"); else if(r < 0.8) gesture("touchHair"); } } else st.idleT = 0;
-  const stride=Math.max(st.mvS,acting.pivot);
-  const wG = st.g, wW = stride*(1 - wG), wI = (1 - stride)*(1 - wG);
+  if(mv < 0.05 && !st.gesture){ st.idleT += dt; if(st.idleT > 13 + Math.random()*0.5){ st.idleT = 0; const r = Math.random(); if(r < 0.5) gesture("lookAround"); else if(r < 0.8) gesture("touchHair"); } } else st.idleT = 0;
+  const wG = st.g, wW = st.mvS*(1 - wG), wI = (1 - st.mvS)*(1 - wG);
   A.walk.setEffectiveWeight(wW); A.idle.setEffectiveWeight(wI); if(st.gesture) A[st.gesture].setEffectiveWeight(wG);
   A.walk.timeScale = speed > 0.08 ? Math.max(0.6, Math.min(1.35, speed/SPEED)) : 1;
   girl.mixer.update(dt);
   { const br = Math.sin(t*1.45)*(1 - st.mvS*0.7); B.chest.quaternion.multiply(qb.setFromAxisAngle(XA, br*0.014)); B.upperChest.quaternion.multiply(qb.setFromAxisAngle(XA, br*0.01)); }
-  acting.pose();girl.model.updateMatrixWorld(true); girl.ch.updateConstraints();acting.rememberGaze();
+  girl.model.updateMatrixWorld(true); girl.ch.updateConstraints();
   /* head + eyes find the camera when she is facing it and standing */
   B.eyeL.quaternion.copy(girl.eyeQ0[0]); B.eyeR.quaternion.copy(girl.eyeQ0[1]);
   B.head.getWorldPosition(headP); camTo.subVectors(camera.position, headP);
   const camDist = camTo.length(); camTo.normalize();
   B.head.getWorldQuaternion(headWQ); hfw.copy(girl.headFwd).applyQuaternion(headWQ);
   const facing = hfw.x*camTo.x + hfw.z*camTo.z;
-  const wantLook = (1 - acting.gaze)*(1 - st.mvS)*(1 - wG)*(facing > 0.15 ? 1 : 0)*(camDist < 4.5 ? 1 : 0.4);
+  const wantLook = (1 - st.mvS)*(1 - wG)*(facing > 0.15 ? 1 : 0)*(camDist < 4.5 ? 1 : 0.4);
   st.look += (wantLook - st.look)*(1 - Math.exp(-dt*2.5));
   if(st.look > 0.01){
     const ang = Math.acos(Math.max(-1, Math.min(1, hfw.dot(camTo)))), lim = 0.55, k = Math.min(1, lim/Math.max(ang, 1e-3));
@@ -1849,7 +1846,6 @@ function updateGirl(dt, t){
     B.head.getWorldQuaternion(headWQ); hfw.copy(girl.headFwd).applyQuaternion(headWQ); B.head.parent.getWorldQuaternion(parWQ);
     headWQ.premultiply(qa.setFromAxisAngle(hfw, -st.tilt)); B.head.quaternion.copy(parWQ.invert().multiply(headWQ)); B.head.updateMatrixWorld(true);
   }
-  acting.aim(dt);
   /* camera-following soft key (front-left, above) and cool rim (behind) for her materials */
   { const az = Math.atan2(camera.position.x - st.x, camera.position.z - st.z), ka = az + 0.6, ke = 0.62, ra = az + Math.PI - 0.5, re = 0.45;
     KEYU.kd.value.set(Math.sin(ka)*Math.cos(ke), Math.sin(ke), Math.cos(ka)*Math.cos(ke));
@@ -1867,10 +1863,8 @@ function updateGirl(dt, t){
   let wk = 0; if(st.winkT >= 0){ st.winkT += dt; const k = st.winkT/0.9; wk = k < 1 ? Math.sin(Math.min(1, k*1.6)*Math.PI*0.5)*(1 - Math.max(0, (k - 0.7)/0.3)) : 0; if(k >= 1) st.winkT = -1; }
   girl.morph("Fcl_ALL_Joy", st.joy*0.36*(1 - wk)); girl.morph("Fcl_ALL_Fun", 0.08 + 0.08*(st.near || 0));
   girl.morph("Fcl_EYE_Fun", (0.12 + 0.04*(st.near || 0))*(1 - st.joy)); girl.morph("Fcl_EYE_Close_R", wk);
-  girl.morph("Fcl_MTH_Fun", Math.max((0.42 + 0.12*(st.near || 0))*(1 - st.joy*0.75)-.17*acting.catWeight, wk*0.5));
-  girl.morph("Fcl_MTH_Joy",acting.smile*.48);girl.morph("Fcl_BRW_Fun",acting.smile*.26);
-  girl.morph("Fcl_EYE_Joy",acting.smile*.18);
-  girl.morph("Fcl_EYE_Close", Math.max(bl*(1 - st.joy*0.3),acting.blink)*(1 - wk));
+  girl.morph("Fcl_MTH_Fun", Math.max((0.42 + 0.12*(st.near || 0))*(1 - st.joy*0.75), wk*0.5));
+  girl.morph("Fcl_EYE_Close", bl*(1 - st.joy*0.3)*(1 - wk));
   /* umbrella twirl */
   let spinK = 0;
   if(st.spinT >= 0){ st.spinT += dt; const k = Math.min(1, st.spinT/1.3); spinK = Math.sin(k*Math.PI); girl.U.spin.rotation.y += dt*spinK*12; if(k >= 1) st.spinT = -1; }
@@ -2088,7 +2082,7 @@ function updateNPCs(dt, t){
     /* greet her when she comes close (once in a while), keep facing her while she stays */
     if(girl.ready && dGirl < 1.05 && n.mode !== "greet" && t - n.greetT > 22){
       n.prevMode = n.mode === "chat" ? "loop" : n.mode; n.mode = "greet"; n.walkTo = null; n.t = 0; n.greetT = t; npcProps(n, null); npcPlay(n, "n_wave", 0.35); n.joyT = 2.2;
-      if(Math.hypot(st.vx, st.vz) < 0.05 && !st.gesture) setTimeout(() => gesture("wave","npc"), 650);
+      if(Math.hypot(st.vx, st.vz) < 0.05 && !st.gesture) setTimeout(() => gesture("wave"), 650);
     }
     if(n.mode === "greet"){
       n.wantYaw = Math.atan2(st.x - n.x, st.z - n.z); n.t += dt;
@@ -2275,7 +2269,7 @@ hintEl.textContent = "人物加载中…";
 let hintArmed = false;
 camBtn.addEventListener("click", () => { noteInteract(); setMode(camMode === "close" ? "full" : "close"); });
 const MOVE = new Set(["KeyW","KeyA","KeyS","KeyD","ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Space"]);
-window.addEventListener("keydown", e => { if(!MOVE.has(e.code) || (film && film.locksWalk) || (e.code === "Space" && e.target instanceof Element && e.target.closest("button"))) return; e.preventDefault(); noteInteract(); if(e.code === "Space"){ if(!e.repeat) gesture("wave"); } else keys.add(e.code); });
+window.addEventListener("keydown", e => { if(!MOVE.has(e.code) || (film && film.locksWalk) || (e.code === "Space" && e.target instanceof Element && e.target.closest("button"))) return; e.preventDefault(); noteInteract(); if(e.code === "Space"){ if(!e.repeat) playerGesture("wave"); } else keys.add(e.code); });
 window.addEventListener("keyup", e => keys.delete(e.code));
 window.addEventListener("blur", () => keys.clear());
 const ray = new T.Raycaster(), ndc = new T.Vector2(), groundPlane = new T.Plane(v3(0,1,0), -0.03), hit = new T.Vector3();
@@ -2289,7 +2283,7 @@ function endPointer(e){ activePointers = Math.max(0, activePointers - 1);
   if(film && film.hit(ray)) return;
   if(film) film.cancelTravel();
   if(streetWalk && streetWalk.hit(ray)) return;
-  if(girl.ready && (ray.ray.distanceSqToPoint(v3(st.x, st.y + 0.45, st.z)) < 0.2*0.2 || ray.ray.distanceSqToPoint(v3(st.x, st.y + 0.75, st.z)) < 0.16*0.16)){ gesture(); return; }
+  if(girl.ready && (ray.ray.distanceSqToPoint(v3(st.x, st.y + 0.45, st.z)) < 0.2*0.2 || ray.ray.distanceSqToPoint(v3(st.x, st.y + 0.75, st.z)) < 0.16*0.16)){ playerGesture(); return; }
   if(ray.ray.intersectPlane(groundPlane, hit) && hit.x > -3.95 && hit.x < 8.95 && hit.z > ZN + 0.05 && hit.z < 3.95){ if(streetWalk) streetWalk.cancel(); routeTo(hit.x, hit.z); }
 }
 canvas.addEventListener("pointerup", endPointer);
@@ -2386,8 +2380,13 @@ function lowerQuality(){ level++;
 const filmProps = window.createFilmStreetProps({THREE:T, scene});
 addCol(5.565, 1.00, 5.955, 1.24);
 filmBus = window.createNightBus({THREE:T, scene, renderer});
-rainDetails = optionalCharacterDetail("雨夜挂件",()=>window.createRainDetails({THREE:T, scene, girl, player:st, cat, gesture, ripple}));
-acting = window.createCharacterActing({THREE:T,girl,player:st,cat,bus:filmBus,details:rainDetails,reduced:reduce});
+rainDetails = optionalCharacterDetail("三花听声",()=>window.createRainDetails({THREE:T,girl,player:st,cat}));
+function playerGesture(name){
+  if(!girl.ready || st.target || keys.size)return;
+  const wave=(name || GESTS[gestI % GESTS.length])==="wave";
+  gesture(name);
+  if(wave && st.gesture==="wave")rainDetails?.greet();
+}
 film = window.createRainFilm({THREE:T, canvas, camera, controls, player:st, cat, keys, props:filmProps, bus:filmBus,
   reduced:reduce, ready:() => girl.ready, getMode:() => camMode, setMode,
   takeControl:() => { if(streetWalk) streetWalk.cancel(); tween = null; noteInteract(); },
@@ -2411,7 +2410,7 @@ function clearStreetView(from,to,skin=0){
 }
 streetWalk=window.createStreetWalk({THREE:T,scene,camera,controls,canvas,player:st,cat,chime:parkChime,notice:catNotice,bus:filmBus,
   reduced:reduce,keys,ready:()=>girl.ready,street:()=>!film.controlsCamera,getMode:()=>camMode,
-  interact:noteInteract,takeCamera:()=>{tween=null;noteInteract();},greet:()=>gesture("wave"),replies:()=>acting.replies,
+  interact:noteInteract,takeCamera:()=>{tween=null;noteInteract();},greet:()=>playerGesture("wave"),replies:()=>rainDetails?.replies||0,catHeard:()=>!!rainDetails?.responded,
   route:(goal,boarding)=>window.walkRainStreet(st,goal,colliders,filmBus,boarding),clear:standingRoom,clearView:clearStreetView});
 const clock = new T.Clock(), fol = new T.Vector3();
 let flick = 0;
@@ -2429,7 +2428,7 @@ function frame(){
   neonLight.intensity = on ? 0.9 : 0.25; neonGlow.material.opacity = on ? 0.6 : 0.2; neonPool.material.opacity = on ? 0.34 : 0.12;
   updateGirl(dt, t); updateNPCs(dt, t); updateCat(dt, t); updateBackLight(dt);
   if(rainDetails){
-    try{rainDetails.update(dt,t)}catch(e){optionalCharacterDetail("挂件动作",()=>{throw e});rainDetails=null}
+    try{rainDetails.update(dt)}catch(e){optionalCharacterDetail("三花听声",()=>{throw e});rainDetails=null}
   }
   film.tick(dt,t); streetWalk.update(dt,t);
   if(reflector) reflector.material.uniforms.uTime.value = t;
@@ -2470,8 +2469,7 @@ function startCharacter(){
 retryCharacter.addEventListener("click",startCharacter);
 startCharacter();
 frame();
-window.__diorama = {streetWalk:Object.freeze({info:streetWalk.info}), get characterLoad(){return assetLoader?.state||{phase:"asset"}}, film, st, keys, setTarget:(x,z) => { routeTo(x, z); }, camera, controls, renderer, composer, bloom, girl, setMode, gesture, npcs, cat, BACK, simBack, simGirl, routeTo, finishTween:() => { if(tween) tween.k = 0.999; }, info:() => ({HDR, POST, level, pr, camMode, ready:girl.ready})};
-Object.defineProperty(window.__diorama,"acting",{enumerable:true,value:Object.freeze({info:acting.info,get replies(){return acting.replies;}})});
+window.__diorama = {hairFinish:Object.freeze({get mode(){return hairFinish.mode},set:hairFinish.set,toggle:hairFinish.toggle}),streetWalk:Object.freeze({info:streetWalk.info}), get characterLoad(){return assetLoader?.state||{phase:"asset"}}, film, st, keys, setTarget:(x,z) => { routeTo(x, z); }, camera, controls, renderer, composer, bloom, girl, setMode, gesture, npcs, cat, BACK, simBack, simGirl, routeTo, finishTween:() => { if(tween) tween.k = 0.999; }, info:() => ({HDR, POST, level, pr, camMode, ready:girl.ready})};
 })();
 </script>
 

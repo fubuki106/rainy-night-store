@@ -3,7 +3,7 @@ import WebKit
 
 let title="雨夜便利店·末班底片"
 
-final class GameApp:NSObject,NSApplicationDelegate,WKNavigationDelegate,WKDownloadDelegate {
+final class GameApp:NSObject,NSApplicationDelegate,WKNavigationDelegate,WKDownloadDelegate,NSMenuDelegate {
     let proof:Proof?
     let profile:UUID?
     var view:WKWebView!
@@ -12,6 +12,7 @@ final class GameApp:NSObject,NSApplicationDelegate,WKNavigationDelegate,WKDownlo
     var started=false
     var watchdog:Timer?
     private var downloads=[ObjectIdentifier:(partial:URL,destination:URL)]()
+    private weak var hairMenu:NSMenu?
     init(proof:Proof?,profile:UUID?) {self.proof=proof;self.profile=profile}
 
     func applicationDidFinishLaunching(_ notification:Notification) {
@@ -65,12 +66,34 @@ final class GameApp:NSObject,NSApplicationDelegate,WKNavigationDelegate,WKDownlo
         edit.submenu?.addItem(withTitle:"复制",action:#selector(NSText.copy(_:)),keyEquivalent:"c")
         edit.submenu?.addItem(withTitle:"粘贴",action:#selector(NSText.paste(_:)),keyEquivalent:"v")
         edit.submenu?.addItem(withTitle:"全选",action:#selector(NSText.selectAll(_:)),keyEquivalent:"a")
+        let displayItem=NSMenuItem(), display=NSMenu(title:"画面")
+        bar.addItem(displayItem);displayItem.submenu=display;display.delegate=self;hairMenu=display
+        for (i,name) in ["发丝：原版","发丝：柔光"].enumerated() {
+            let option=display.addItem(withTitle:name,action:#selector(chooseHair(_:)),keyEquivalent:"")
+            option.target=self;option.tag=i;option.state=i==0 ? .on:.off
+        }
         let wi=NSMenuItem();bar.addItem(wi);wi.submenu=NSMenu(title:"窗口")
         wi.submenu?.addItem(withTitle:"关闭",action:#selector(NSWindow.performClose(_:)),keyEquivalent:"w")
         wi.submenu?.addItem(withTitle:"最小化",action:#selector(NSWindow.performMiniaturize(_:)),keyEquivalent:"m")
         let full=wi.submenu?.addItem(withTitle:"切换全屏",action:#selector(NSWindow.toggleFullScreen(_:)),keyEquivalent:"f")
         full?.keyEquivalentModifierMask=[.command,.control]
         NSApp.mainMenu=bar
+    }
+
+    private func markHair(_ mode:String) {
+        for item in hairMenu?.items ?? [] {item.state=(item.tag==1)==(mode=="soft") ? .on:.off}
+    }
+    func menuWillOpen(_ menu:NSMenu) {
+        guard menu === hairMenu else{return}
+        view.evaluateJavaScript("window.__diorama?.hairFinish.mode"){[weak self] value,_ in
+            if let mode=value as? String {self?.markHair(mode)}
+        }
+    }
+    @objc private func chooseHair(_ item:NSMenuItem) {
+        let mode=item.tag==1 ? "soft":"original"
+        view.evaluateJavaScript("window.__diorama?.hairFinish.set('\(mode)')"){[weak self] value,_ in
+            if let selected=value as? String {self?.markHair(selected)}
+        }
     }
 
     func webView(_ w:WKWebView,didFinish n:WKNavigation!) {

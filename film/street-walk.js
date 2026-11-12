@@ -5,7 +5,7 @@ window.createStreetWalk = function (host) {
   let seen=false,following=false;
   try{seen=localStorage.getItem(storage)==="seen";}catch(_){}
   notice.print(seen);
-  let walk=null, view=null, focusKind="", action="",statusTime=0, pace=0, searchTime=0, lastReplies=0;
+  let walk=null, view=null, focusKind="", action="",lastInteraction="",statusTime=0, pace=0, searchTime=0, lastReplies=0;
   const v=(x,y,z)=>new T.Vector3(x,y,z),dist=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z);
   const catAim=v(0,0,0);
   const container=document.createElement("div");container.id="rain-walk";container.hidden=true;
@@ -30,9 +30,9 @@ window.createStreetWalk = function (host) {
   function nearestNotice(){return dist(player,notice.anchors[0])<dist(player,notice.anchors[1])?"front":"side";}
   function available(){
     if(walk)return "walk";
-    if(focusKind==="cat"||dist(player,cat)<1.2||host.getMode()==="back")return "cat";
+    if(dist(player,cat)<1.2||host.getMode()==="back")return "cat";
     if(focusKind==="chime"||dist(player,chime.anchor)<1.27)return "chime";
-    if(focusKind==="wait"||dist(player,stop)<.85)return "wait";
+    if(dist(player,stop)<.85)return "wait";
     if(following)return "cat";
     const which=nearestNotice();
     if(focusKind==="front"||focusKind==="side")return focusKind;
@@ -86,34 +86,16 @@ window.createStreetWalk = function (host) {
   function destination(key){return key==="cat"?catPlace():key==="wait"?stop:key==="chime"?chime.anchor:notice.anchors[key==="front"?0:1];}
   function close(key){if(key==="wait")return player.z<1.59&&dist(player,stop)<.09;
     return key==="cat"?dist(player,cat)<.585:dist(player,destination(key))<(key==="chime"?.46:.52);}
-  function catView(){
-    const center=v((player.x*.57+cat.x*.43),player.y+.40,(player.z*.57+cat.z*.43));
-    const f=v(cat.x-player.x,0,cat.z-player.z).normalize(),side=v(-f.z,0,f.x);if(side.z>0)side.multiplyScalar(-1);
-    const nearNorth=v(0,0,-1), directions=[f.clone().multiplyScalar(.71).addScaledVector(side,.77).normalize(),nearNorth,
-      nearNorth.clone().addScaledVector(f,.6).normalize(),f.clone().multiplyScalar(.5).addScaledVector(side,-.87).normalize()];
-    let eye=null;
-    for(const length of [2.20,1.98,1.76]){
-      for(const d of directions){const c=center.clone().addScaledVector(d,length);c.y=center.y+.31;
-        if(host.clearView(center,c)){eye=c;break;}}
-      if(eye)break;
-    }
-    if(!eye)eye=center.clone().add(v(-.86,1.15,-1.62));
-    bookView("cat",center,eye,6.2,33);
-  }
   function perform(key){
     walk=null;host.keys.clear();player.target=null;player.path=null;player.vx=0;player.vz=0;
+    lastInteraction=key;
     if(key==="cat"){
-      catView();host.greet();
-      if(cat.state==="eat"||cat.state==="toDish")say("三花正要吃饭。",2.1);
-      else say("");
+      // Keep her own camera, face and original wave. The cat decides whether to answer.
+      endView();
+      if(cat.state==="eat"||cat.state==="toDish")say("三花在吃饭。",2.1);
+      else {host.greet();say("");}
     }else if(key==="wait"){
-      bus.start();
-      // Frame through the real gap between the timetable and the printer.
-      // Her final footfall depends on the direction she walked in from.
-      const eyeZ=player.z+(1.32-player.z)*(6.42-player.x)/(6.0-player.x);
-      const target=v(player.x+.018,player.y+.70,player.z+.025);
-      bookView(key,target,v(6.42,.915,eyeZ),12,35);
-      say("07 路末班　23:47",2.6);
+      endView();bus.start();say("07 路末班　23:47",2.6);
     }else if(key==="chime"){
       if(chime.ring()){
         const target=v(7.39,.935,.62);bookView(key,target,v(8.12,1.05,-.24),3.8,39);say("");
@@ -187,5 +169,5 @@ window.createStreetWalk = function (host) {
     camera.fov=view.homeFov;camera.updateProjectionMatrix();view=null;focusKind="";
   });
   return {update,hit,cancel,get framesView(){return !!view;},
-    info:()=>({near:action,walking:walk?.key||"",view:focusKind,following,seen,replies:lastReplies,chime:chime.info()})};
+    info:()=>({near:action,last:lastInteraction,catHeard:host.catHeard(),walking:walk?.key||"",view:focusKind,following,seen,replies:lastReplies,chime:chime.info()})};
 };

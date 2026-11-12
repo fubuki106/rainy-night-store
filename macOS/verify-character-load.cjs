@@ -110,8 +110,8 @@ async function ready(page) {
     }));assert.equal(cases["late-assembly-retry"].attempt,2);
     await scenario("optional-accessories",base,async p=>{
       await p.route(base,async r=>r.fulfill({contentType:"text/html",body:(await original).replace("function makeJewellery(model, env){",'function makeJewellery(model, env){throw Error("injected accessory error");')}));
-      await p.route("**/film/rain-details.js",r=>r.fulfill({contentType:"text/javascript",body:'window.createRainDetails=()=>{throw Error("injected new charm error")};'}))
-    });assert(cases["optional-accessories"].warnings.includes("穿戴首饰"));assert(cases["optional-accessories"].warnings.includes("雨夜挂件"));
+      await p.route("**/film/rain-details.js",r=>r.fulfill({contentType:"text/javascript",body:'window.createRainDetails=()=>{throw Error("injected cat detail error")};'}))
+    });assert(cases["optional-accessories"].warnings.includes("穿戴首饰"));assert(cases["optional-accessories"].warnings.includes("三花听声"));
     await fs.writeFile(path.join(dest,"report.json"),JSON.stringify(cases,null,2));
     console.log("Original character and NPCs loaded in all "+Object.keys(cases).length+" scenarios.");
   }finally{await browser.close();await new Promise(ok=>httpServer.close(ok))}
