@@ -41,3 +41,12 @@ profile=$(uuidgen)
 "$runner" --probe macOS/verify-chapter.js /tmp/rainy-night-film --profile "$profile"
 "$runner" --probe macOS/verify-reopen.js /tmp/rainy-night-reopen --profile "$profile"
 ```
+
+要从橱窗一路实走到三花、公园风铃和 07 路站台，运行下面这项验收。它会检查猫回应后留下的印记、两次拨铃造成的水滴、车辆到站与离开特写时的移动控制，并保存六张游戏截图。
+
+```sh
+"$runner" --probe macOS/verify-street-life.js /tmp/rainy-night-street
+python3 macOS/verify-character-pack.py
+```
+
+角色校验会将打包后的 GLB 与原版的 SHA-256 对照，并逐字节核对 21 张贴图。Mac 应用不需要联网下载角色。

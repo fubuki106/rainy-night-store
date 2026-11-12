@@ -79,8 +79,13 @@
     const parent=tip.parent, swivel=new T.Group();swivel.name="三花 / 尾尖回应";
     swivel.position.copy(tip.position);parent.add(swivel);
     const rest=tip.position.clone();tip.position.set(0,0,0);swivel.add(tip);
-    return {ears,eyes,swivel,headZ:cat.head.rotation.z,dispose(){
+    const turn=new T.Group();turn.name="三花 / 听见她";
+    for(const child of cat.head.children.slice())turn.add(child);
+    cat.head.add(turn);
+    return {ears,eyes,swivel,turn,headZ:cat.head.rotation.z,dispose(){
       parent.add(tip);tip.position.copy(rest);swivel.removeFromParent();
+      for(const child of turn.children.slice())cat.head.add(child);
+      turn.removeFromParent();
       ears.forEach(v=>v.object.rotation.y=v.angle);eyes.forEach(v=>v.object.scale.y=v.height);
       cat.head.rotation.z=this.headZ;
     }};
@@ -88,7 +93,7 @@
 
   function createRainDetails({THREE:T,girl,player,cat}) {
     const reduced=!!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
-    let charm=null, f=null, age=9, cooldown=0, disposed=false, first=true;
+    let charm=null, f=null, age=9, cooldown=0, listenTime=0, responded=false, disposed=false, first=true;
     let tiltX=0,tiltZ=0,velX=0,velZ=0;
     const prev=new T.Vector3(), at=new T.Vector3(), speed=new T.Vector3(), velocity=new T.Vector3();
     const q=new T.Quaternion(), desired=new T.Quaternion(), e=new T.Euler(0,0,0,"YXZ");
@@ -100,12 +105,22 @@
       if(disposed || !cat || !girl || !girl.ready || cooldown>0)return false;
       if(cat.state==="eat" || cat.state==="toDish")return false;
       if(Math.hypot(player.x-cat.x,player.z-cat.z)>1.06)return false;
-      age=0;cooldown=3.0;return true;
+      age=9;listenTime=2.55;responded=false;cooldown=3.25;return true;
     }
     function update(dt,t) {
       if(disposed)return;
       dt=Math.min(.05,Math.max(0,Number(dt)||0));t=Number(t)||0;
       cooldown=Math.max(0,cooldown-dt);age+=dt;
+      if(listenTime>0){
+        listenTime=Math.max(0,listenTime-dt);
+        const dx=player.x-cat.x,dz=player.z-cat.z,dist=Math.hypot(dx,dz);
+        const toward=Math.atan2(Math.sin(Math.atan2(dx,dz)-cat.yaw),Math.cos(Math.atan2(dx,dz)-cat.yaw));
+        if(cat.state==="eat"||cat.state==="toDish"||dist>1.13||Math.hypot(player.vx,player.vz)>.09||player.target){
+          listenTime=0;age=9;responded=false;
+        }else if(!responded&&listenTime<2.24&&dist<=1.06&&Math.abs(toward)<.54){
+          responded=true;age=0;
+        }
+      }
       if(!charm && girl && girl.U && girl.U.umb)charm=ornament(T,girl.U.umb);
       if(charm){
         const a=charm.anchor;a.getWorldPosition(at);
@@ -132,7 +147,11 @@
       const hear=bump(.02,.25,.71,1.43,age)*(reduced?.55:1);
       const blink=bump(.36,.50,.68,.97,age);
       const dx=player.x-cat.x,dz=player.z-cat.z;
-      const side=Math.sin(Math.atan2(dx,dz)-cat.yaw)>=0?1:-1;
+      const bearing=Math.atan2(Math.sin(Math.atan2(dx,dz)-cat.yaw),Math.cos(Math.atan2(dx,dz)-cat.yaw));
+      const side=bearing>=0?1:-1;
+      const attention=bump(.12,.52,.88,1.52,age)*(reduced?.55:1);
+      f.turn.rotation.y=bound(bearing-cat.head.rotation.y,.31)*attention;
+      f.turn.rotation.x=-.16*attention+.045*blink;
       f.ears.forEach(({object,angle})=>{
         const near=Math.sign(object.position.x)===side;
         object.rotation.y=angle+(near?.47:-.15)*side*hear;
@@ -146,7 +165,7 @@
     function dispose(){
       if(disposed)return;disposed=true;if(charm)charm.dispose();if(f)f.dispose();
     }
-    return {update,greet,dispose};
+    return {update,greet,dispose,get listening(){return listenTime>0;},get responded(){return responded&&listenTime>0;}};
   }
   window.createRainDetails=createRainDetails;
 })();

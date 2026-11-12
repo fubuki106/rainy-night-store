@@ -50,14 +50,31 @@ final class Proof:NSObject,WKScriptMessageHandlerWithReply {
                 fputs("WebKit proof: \(err.domain) \(err.code) \(err.userInfo)\n",stderr);done(1)
             case let .success(report):
                 do {
-                    let data=try Data(contentsOf:site.directory.appendingPathComponent("girl.glb.txt"))
-                    let hash=SHA256.hash(data:data).map{String(format:"%02x",$0)}.joined()
+                    let file="film/character-pack.js"
+                    let text=try String(contentsOf:site.directory.appendingPathComponent(file),encoding:.utf8).trimmingCharacters(in:.whitespacesAndNewlines)
+                    let prefix="window.RainyCharacterPack="
+                    guard text.hasPrefix(prefix),text.hasSuffix(";"),
+                          let payloadJSON=String(text.dropFirst(prefix.count).dropLast()).data(using:.utf8),
+                          let pack=try JSONSerialization.jsonObject(with:payloadJSON) as? [String:Any],
+                          let base=pack["model"] as? String,let glb=Data(base64Encoded:base),
+                          let textures=pack["textures"] as? [String:String],textures.count==21 else {
+                        throw ProofError.issue("Bundled original character is incomplete")
+                    }
+                    let hash=SHA256.hash(data:Data(base.utf8)).map{String(format:"%02x",$0)}.joined()
+                    let glbHash=SHA256.hash(data:glb).map{String(format:"%02x",$0)}.joined()
+                    guard glbHash=="e86983558b8c6739da0389b4e3fe7456a0161e6b12e34b858f2c73733e8d913c" else {
+                        throw ProofError.issue("The mounted GLB differs from the original actor")
+                    }
+                    for (name,payload) in textures {
+                        let source=try Data(contentsOf:site.directory.appendingPathComponent("gtex").appendingPathComponent(name))
+                        guard Data(base64Encoded:payload)==source else{throw ProofError.issue("Texture differs: "+name)}
+                    }
                     let out:[String:Any]=["origin":BundleSite.home.absoluteString,"runtime":"WKWebView",
-                        "sourceModelSHA256":hash,"served":site.served.sorted(),"missing":site.missing.sorted(),
+                        "sourceModelSHA256":hash,"originalGLBSHA256":glbHash,"originalTextureCount":textures.count,"served":site.served.sorted(),"missing":site.missing.sorted(),
                         "screenshots":self.requestedFrames,"result":report]
                     let json=try JSONSerialization.data(withJSONObject:out,options:[.prettyPrinted,.sortedKeys,.withoutEscapingSlashes])
                     try json.write(to:self.directory.appendingPathComponent("report.json"),options:.atomic)
-                    guard site.served.contains("girl.glb.txt") && site.served.contains("vendor/three/three.min.js") else {
+                    guard site.served.contains(file) && site.served.contains("vendor/three/three.min.js") else {
                         throw ProofError.issue("Verification did not use bundled character and engine")
                     }
                     print("WebKit proof passed — \(self.directory.path)");done(0)
