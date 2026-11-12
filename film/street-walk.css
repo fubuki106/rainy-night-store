@@ -1,0 +1,10 @@
+#rain-walk{position:fixed;z-index:2;bottom:max(20px,env(safe-area-inset-bottom));left:max(16px,env(safe-area-inset-left));max-width:44vw;display:flex;align-items:flex-start;flex-direction:column;gap:7px;pointer-events:none;font-family:"Hiragino Sans","PingFang SC",system-ui,sans-serif}
+#rain-walk[hidden],#rain-walk [hidden]{display:none!important}
+#rain-walk .rw-action{order:2;display:flex;align-items:center;gap:8px;box-sizing:border-box;padding:7px 10px 7px 7px;min-height:31px;color:#f1e9d6;background:#222e30e6;border:1px solid #d4cfb967;border-radius:3px;pointer-events:auto;touch-action:manipulation;font:inherit;font-size:12px;cursor:pointer}
+#rain-walk .rw-action:focus-visible{outline:2px solid #e9c886;outline-offset:3px}
+#rain-walk kbd{display:inline-block;font:11px ui-monospace,Menlo,monospace;line-height:14px;border:1px solid #c5c5b969;border-radius:2px;padding:0 3px;color:#e6d6a8}
+#rain-walk output{color:#f1e9d6;background:#1a2429e8;border-left:2px solid #b8a378;padding:6px 10px;font-size:12px;line-height:1.45;max-width:220px}
+@media(pointer:coarse){#rain-walk kbd{display:none}#rain-walk .rw-action{padding:9px 10px;min-height:38px}}
+@media(max-width:480px){#rain-walk{left:9px;bottom:max(14px,env(safe-area-inset-bottom));max-width:42vw}}
+#hair-finish-label{position:fixed;z-index:9;top:calc(env(safe-area-inset-top,0px) + 17px);left:50%;transform:translateX(-50%);border-radius:13px;background:rgba(21,25,39,.78);color:#faf7ee;padding:4px 12px;font:12px/1.5 system-ui,sans-serif;pointer-events:none}
+#hair-finish-label[hidden]{display:none}

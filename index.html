@@ -1,4 +1,4 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>雨夜便利店</title><meta name="description" content="在雨夜的便利店街角散步，撑伞探索绣球花公园和店后小巷，与店员、送货员和三花猫相遇。"><meta name="theme-color" content="#0a0f22"><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>雨夜便利店 · 末班底片</title><meta name="description" content="在雨夜的便利店街角散步，撑伞探索绣球花公园和店后小巷，与店员、送货员和三花猫相遇。"><meta name="theme-color" content="#0a0f22"><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <style>
 /* Layout: one full-bleed WebGL diorama with an anime-style rigged character. Overlays: a hint pill that fades after first use and a small 近景/全景 camera toggle. Single night world by design. */
 :root{
@@ -19,6 +19,8 @@ body{margin:0;overflow:hidden;background:var(--night);background-image:radial-gr
 .cam:hover{background:rgba(28,38,84,.78)}
 .cam:focus-visible{outline:2px solid #9cc3ff;outline-offset:2px}
 .cam2{right:auto;left:16px}
+#character-retry{position:fixed;z-index:12;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 59px);padding:8px 20px;border:1px solid #aab7d5;border-radius:18px;background:#192039;color:#fff;font:inherit;cursor:pointer}
+#character-retry:focus-visible{outline:2px solid white;outline-offset:2px}
 .fallback{position:fixed;inset:0;display:grid;place-items:center;padding:24px;text-align:center;color:var(--muted)}
 .fallback[hidden]{display:none}
 @media (prefers-reduced-motion: reduce){.hint{transition:none}}
@@ -26,11 +28,27 @@ body{margin:0;overflow:hidden;background:var(--night);background-image:radial-gr
 
 <noscript><p class="fallback">请开启 JavaScript 来探索雨夜便利店。</p></noscript>
 <canvas id="c" tabindex="0" aria-label="雨夜便利店街角的 3D 微缩场景，可以操控撑着透明伞的长发女孩"></canvas>
-<p class="hint" id="hint"></p>
+<p class="hint" id="hint" role="status"></p>
+<button type="button" id="character-retry" hidden>重试载入</button>
 <button class="cam" id="cam" type="button" aria-pressed="false">近景</button>
 <button class="cam cam2" id="back" type="button" aria-pressed="false">后门</button>
 <div class="fallback" id="fb" hidden><p>这个 3D 场景需要 WebGL，这次没有加载成功。请刷新页面再试一次。</p></div>
 
+<link rel="stylesheet" href="film/last-frame.css">
+<link rel="stylesheet" href="film/street-walk.css">
+<link rel="stylesheet" href="film/contact-print.css">
+<script src="film/store-shelves.js"></script>
+<script src="film/night-bus.js"></script>
+<script src="film/walk-to-stop.js"></script>
+<script src="film/street-props.js"></script>
+<script src="film/cat-notice.js"></script>
+<script src="film/park-chime.js"></script>
+<script src="film/street-walk.js"></script>
+<script src="film/rain-details.js"></script>
+<script src="film/hair-finish.js"></script>
+<script src="film/contact-print.js"></script>
+<script src="film/last-frame.js"></script>
+<script src="film/character-loader.js"></script>
 <script src="vendor/three/three.min.js"></script>
 <script src="vendor/three/OrbitControls.js"></script>
 <script src="vendor/three/Reflector.js"></script>
@@ -70,6 +88,8 @@ const HDR = CBF || (gl2 && !!renderer.extensions.get("EXT_color_buffer_half_floa
 const NOREF = 1;
 
 const scene = new T.Scene();
+const hairFinish = window.createRainHairFinish?.() || {mode:"original",set:()=>"original",toggle:()=>"original"};
+let streetWalk = null, film = null, filmBus = null, rainDetails = null;
 scene.fog = new T.Fog(0x161d44, 20, 46);
 const camera = new T.PerspectiveCamera(30, 1, 0.04, 140);
 camera.layers.enable(NOREF);
@@ -166,21 +186,8 @@ function vendTex(main, band, label, seed){ return ctex(192, 512, (g,w,h) => {
 }); }
 const vendA = vendTex("#e0474c", "#2f6fd6", "つめた〜い", 0);
 const vendB = vendTex("#2f6fd6", "#e0474c", "あったか〜い", 3);
-const fridgeTex = ctex(512, 256, (g,w,h) => {
-  g.fillStyle = "#f4fbff"; g.fillRect(0,0,w,h);
-  const cols = ["#ff7043","#42a5f5","#66bb6a","#ffca28","#ab47bc","#26c6da","#ef5350","#8d6e63"];
-  for(let d=0; d<4; d++){
-    const x0 = 8 + d*126; g.fillStyle = "#cfe8f5"; g.fillRect(x0, 8, 118, h-16);
-    for(let r=0;r<4;r++) for(let c=0;c<6;c++){ g.fillStyle = cols[(d*3 + r*2 + c) % cols.length]; rr(g, x0+8+c*18, 20+r*56, 12, 40, 4); g.fill(); }
-    g.fillStyle = "#9fb4c2"; g.fillRect(x0+104, 90, 6, 60);
-  }
-});
-const shelfTex = ctex(256, 128, (g,w,h) => {
-  g.fillStyle = "#e9eef2"; g.fillRect(0,0,w,h);
-  const cols = ["#ff8a65","#4fc3f7","#aed581","#ffd54f","#ce93d8","#f48fb1","#80cbc4","#ffab91"];
-  for(let r=0;r<3;r++){ g.fillStyle = "#b0bec5"; g.fillRect(0, 38 + r*42, w, 4);
-    for(let c=0;c<14;c++){ g.fillStyle = cols[(r*5 + c*3) % cols.length]; const hh = 18 + ((c*7 + r*3) % 3)*5; g.fillRect(4 + c*18, 38 + r*42 - hh, 14, hh); } }
-});
+const fridgeTex = ctex(1024, 512, window.paintRainyFridge);
+const shelfTex = ctex(768, 384, window.paintRainyShelf);
 const magTex = ctex(256, 128, (g,w,h) => {
   g.fillStyle = "#dfe6ea"; g.fillRect(0,0,w,h);
   const cols = ["#ef5350","#42a5f5","#ffca28","#66bb6a","#ec407a","#7e57c2","#ffa726"];
@@ -357,7 +364,7 @@ box(0.6, 0.05, 0.08, frameMat, 0.75, Y0+1.38, SZ1-0.05, {t:0.008});
   const sb = new T.Mesh(new T.BoxGeometry(SW+0.12, 0.44, 0.16), [wallMat, wallMat, wallMat, wallMat, front, wallMat]);
   sb.position.set(scx, Y0+1.5+0.22, SZ1+0.03); sb.castShadow = true; world.add(sb); outline(sb, 0.014); }
 const glassMat = new T.MeshBasicMaterial({color:0xcfeeff, transparent:true, opacity:0.14, depthWrite:false});
-const sheenMat = new T.MeshBasicMaterial({map:sheenTex, transparent:true, depthWrite:false, opacity:0.9});
+const sheenMat = new T.MeshBasicMaterial({map:sheenTex, transparent:true, depthWrite:false, opacity:0.73});
 function glass(x0, x1, y0, y1, z){ const w = x1-x0, h = y1-y0, cx = (x0+x1)/2, cy = (y0+y1)/2;
   plane(w, h, glassMat, cx, cy, z, {recv:false}); const s = plane(w, h, sheenMat, cx, cy, z + 0.003, {recv:false}); s.renderOrder = 2; }
 glass(SX0+0.12, 0.385, Y0+0.16, Y0+1.47, SZ1-0.03);
@@ -368,7 +375,7 @@ const awn = box(SW+0.24, 0.05, 0.56, tm(0x2a8b86), scx, Y0+1.43, SZ1+0.27, {rx:0
 box(SW+0.24, 0.06, 0.03, tm(0xf3f6f8), scx, Y0+1.36, SZ1+0.55, {t:0.008});
 /* interior */
 { const ceil = lit(new T.MeshBasicMaterial({color:0xffffff}), 2.4); for(const dz of [-0.75, 0, 0.75]) box(SW-0.5, 0.025, 0.08, ceil, scx, Y0+SH-0.05, scz+dz, {ol:false, cast:false}); }
-{ const f = new T.Mesh(new T.BoxGeometry(SW-0.3, 1.25, 0.26), [wallDark, wallDark, wallDark, wallDark, lit(bm(0xffffff, {map:fridgeTex}), 1.2), wallDark]);
+{ const f = new T.Mesh(new T.BoxGeometry(SW-0.3, 1.25, 0.26), [wallDark, wallDark, wallDark, wallDark, lit(bm(0xfff9ee, {map:fridgeTex}), 1.02), wallDark]);
   f.position.set(scx, Y0+0.625, SZ0+0.24); world.add(f); }
 const shelfSide = tm(0xffffff, {map:shelfTex}), shelfCap = tm(0xd9e1e6), shelfEnd = tm(0x2a8b86);
 for(const sx of [0.3, 0.9, 1.5]){ const s = new T.Mesh(new T.BoxGeometry(0.3, 0.82, 1.25), [shelfSide, shelfSide, shelfCap, shelfCap, shelfEnd, shelfEnd]);
@@ -1160,6 +1167,10 @@ float hh1( float n ){ return fract( sin( n )*43758.5453 ); }
     if(mt.tint) m.color.multiply(new T.Color().fromArray(mt.tint));
     const shade = new T.Color().fromArray(mt.shade);
     m.userData.u = {uShade: {value: shade}, uShift: {value: mt.shift}, uToony: {value: mt.toony}};
+    // Only the heroine's existing ProcHair material can opt into the softer reflection.
+    const finish = proc && opts.hairFinish?.fragment ? opts.hairFinish : null;
+    const softKey = finish ? KEY_GLSL.replace(HAIR_GLSL, finish.fragment) : null;
+    if(finish) finish.bind(m);
     m.onBeforeCompile = sh => {
       Object.assign(sh.uniforms, m.userData.u); sh.uniforms.uGI = giU; sh.uniforms.uGISat = giSatU; sh.uniforms.uLim = limU;
       sh.uniforms.uKeyDir = KEYU.kd; sh.uniforms.uKeyCol = KEYU.kc; sh.uniforms.uRimDir = KEYU.rd; sh.uniforms.uRimCol = KEYU.rc; sh.uniforms.uRimFres = {value: rimFres};
@@ -1167,9 +1178,9 @@ float hh1( float n ){ return fract( sin( n )*43758.5453 ); }
         sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nattribute vec3 aT; attribute float aR; attribute float aS; varying vec3 vHT; varying float vHR; varying float vHS;")
           .replace("#include <skinnormal_vertex>", "#include <skinnormal_vertex>\n  { vec3 hT = aT;\n  #ifdef USE_SKINNING\n    hT = ( skinMatrix * vec4( aT, 0.0 ) ).xyz;\n  #endif\n    vHT = normalize( ( modelViewMatrix * vec4( hT, 0.0 ) ).xyz ); vHR = aR; vHS = aS; }"); }
       sh.fragmentShader = sh.fragmentShader.replace("#include <lights_toon_pars_fragment>", TOON_PARS)
-        .replace("#include <common>", "#include <common>\n" + KEY_HEAD).replace("#include <lights_fragment_end>", KEY_GLSL);
+        .replace("#include <common>", "#include <common>\n" + KEY_HEAD).replace("#include <lights_fragment_end>", finish?.mode==="soft" ? softKey : KEY_GLSL);
     };
-    m.customProgramCacheKey = () => proc ? "atoon3h" : "atoon3";
+    m.customProgramCacheKey = () => proc ? (finish?.mode==="soft" ? "atoon3h:soft-v1" : "atoon3h") : "atoon3";
     return mats[name] = m;
   }
   /* inverted-hull outline; width grows a little with camera distance so it reads at every zoom; aOW masks it per vertex */
@@ -1612,67 +1623,89 @@ girl.root.scale.setScalar(CHAR.S); scene.add(girl.root);
 const contact = new T.Mesh(new T.PlaneGeometry(1, 1).rotateX(-Math.PI/2), new T.MeshBasicMaterial({map:glowTex, color:0x000000, transparent:true, opacity:0.5, depthWrite:false, fog:false}));
 contact.scale.set(0.4, 1, 0.3); contact.renderOrder = 1; contact.layers.set(NOREF); scene.add(contact);
 let ENV = null;
-function loadGirl(){
-  ENV = nightEnv();
-  return fetch("girl.glb.txt").then(r => { if(!r.ok) throw new Error("model " + r.status); return r.text(); }).then(b64 => {
-    const bin = atob(b64.trim()), n = bin.length, buf = new Uint8Array(n); for(let i=0;i<n;i++) buf[i] = bin.charCodeAt(i);
-    return new Promise((res, rej) => new T.GLTFLoader().parse(buf.buffer, "", res, rej)); })
-  .then(gltf => {
+let assetLoader=window.RainyCharacterLoader;
+function optionalCharacterDetail(name,fn){
+  if(assetLoader)return assetLoader.optional(name,fn);
+  try{return fn()}catch(e){console.warn("雨夜 / "+name,e);return null}
+}
+async function ensureCharacterLoader(){
+  if(assetLoader)return;
+  await new Promise((resolve,reject)=>{
+    const script=document.createElement("script");
+    function finish(){
+      script.remove();clearTimeout(timer);assetLoader=window.RainyCharacterLoader;
+      if(assetLoader)resolve();else reject(Error("未能打开人物载入器"));
+    }
+    const timer=setTimeout(finish,18000);
+    script.src="film/character-loader.js?retry="+Date.now();script.onload=finish;script.onerror=finish;
+    document.head.append(script);
+  });
+}
+function installGirl(gltf,pack,stage){
+    // Work on an unattached group, preserving the original root's world scale.
+    // A failed shader/rig/prop cannot leave half a character in the live scene.
+    const actor={root:girl.root.clone(false),assetPack:pack};
+    const meta={...META,springs:[...META.springs]};
+    stage("hair");
+    if(!ENV)ENV=nightEnv();
     const C = CHAR.cap, rimY = z => C.by + (z - C.bz)*(C.fy - C.by)/(C.fz - C.bz);
     const sstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a)/(b - a))); return t*t*(3 - 2*t); };
     const OC = [0.06, 0.009, 0.014];
     /* a pristine copy for the back-lot NPCs (they get their own hair, outfits and materials) */
-    if(T.SkeletonUtils) girl.src = {scene: T.SkeletonUtils.clone(gltf.scene), animations: gltf.animations};
-    girl.outlineMask = (x, y, z) => 1 - sstep(-0.018, -0.003, y - rimY(z));
-    girl.hairA2C = POST ? !!(gl2 && (CBF || !HDR)) : true;
+    if(T.SkeletonUtils)actor.src=assetLoader.optional("后场人物原型",()=>({scene:T.SkeletonUtils.clone(gltf.scene),animations:gltf.animations}));
+    actor.outlineMask = (x, y, z) => 1 - sstep(-0.018, -0.003, y - rimY(z));
+    actor.hairA2C = POST ? !!(gl2 && (CBF || !HDR)) : true;
     gltf.scene.getObjectByName("J_Bip_C_Head").scale.setScalar(CHAR.headS);
     /* long straight hair, draped in the pose she stands in */
     { const pm = new T.AnimationMixer(gltf.scene), clip = n => gltf.animations.find(c => c.name === n);
-      const hair = makeHair(T, gltf.scene, META, {seed: 11, anisotropy: Math.min(8, renderer.capabilities.getMaxAnisotropy()),
+      const hair = makeHair(T, gltf.scene, meta, {seed: 11, anisotropy: Math.min(8, renderer.capabilities.getMaxAnisotropy()),
         pose: () => { pm.clipAction(clip("idle")).play(); pm.clipAction(clip("armHold")).play(); pm.setTime(0); }});
       pm.stopAllAction(); pm.uncacheRoot(gltf.scene);
-      META.springs = META.springs.concat(hair.springs); girl.hair = hair; }
-    const ch = makeAnimeChar(T, gltf, META, {keyUniforms: KEYU, outlineScale: 2.6, hairA2C: girl.hairA2C, gi: 0.72, giSat: 0.45, rimFresnel: new T.Color(0.08, 0.1, 0.16),
+      meta.springs = meta.springs.concat(hair.springs); actor.hair = hair; }
+    const ch = makeAnimeChar(T, gltf, meta, {hairFinish, keyUniforms: KEYU, outlineScale: 2.6, hairA2C: actor.hairA2C, gi: 0.72, giSat: 0.45, rimFresnel: new T.Color(0.08, 0.1, 0.16),
       outlineTint: new T.Color(0x1d1a30), anisotropy: Math.min(8, renderer.capabilities.getMaxAnisotropy()), hairHighlight: new T.Color(0.17, 0.18, 0.24),
       /* nothing hidden under the cap may push its outline through it */
-      outlineMask: girl.outlineMask,
+      outlineMask: actor.outlineMask,
       mtoon: {Cap_MAT: {shade: [0.74, 0.77, 0.93], shift: -0.05, toony: 0.9, outline: 0.0006, outlineColor: OC},
         Face_00_SKIN: {shift: 0.32}, FaceMouth_00_FACE: {shift: 0.32}, Tops_01_CLOTH: {tint: [0.94, 0.94, 0.96]}, Body_00_SKIN: {tint: [1.0, 0.985, 0.98], shade: [0.97, 0.84, 0.86]},
         ProcHair: {shade: [0.55, 0.55, 0.68], shift: -0.1, toony: 0.8, outline: 0}, HairBack_00_HAIR: {shade: [0.55, 0.55, 0.68], shift: -0.1, toony: 0.8, outline: 0}}});
-    const model = ch.model; girl.ch = ch;
-    makeJewellery(model, ENV);
+    const model = ch.model; actor.ch = ch;
+    assetLoader.optional("穿戴首饰",()=>makeJewellery(model, ENV));
     /* outlines and the small face layers stay out of the wet-ground reflection and the shadow map (cheaper, not visible there) */
     for(const o of ch.outlines) o.layers.set(NOREF);
     for(const o of ch.parts) if(/FACE|EYE/.test(o.material.name)){ o.castShadow = false; o.layers.set(NOREF); }
-    girl.root.add(model); girl.model = model;
+    actor.root.add(model);actor.root.updateMatrixWorld(true);actor.model=model;
+    stage("moves");
     const by = n => model.getObjectByName(n);
-    girl.bones = {head:by("J_Bip_C_Head"), neck:by("J_Bip_C_Neck"), chest:by("J_Bip_C_Chest"), upperChest:by("J_Bip_C_UpperChest"), eyeL:by("J_Adj_L_FaceEye"), eyeR:by("J_Adj_R_FaceEye"), hand:by("J_Bip_L_Hand"), toeL:by("J_Bip_L_ToeBase"), toeR:by("J_Bip_R_ToeBase")};
-    girl.eyeQ0 = [girl.bones.eyeL.quaternion.clone(), girl.bones.eyeR.quaternion.clone()];   /* eyes are not animated: reset them every frame before aiming */
-    girl.mixer = new T.AnimationMixer(model);
-    girl.A = {}; for(const c of gltf.animations) girl.A[c.name] = girl.mixer.clipAction(c);
-    const A = girl.A;
+    actor.bones = {head:by("J_Bip_C_Head"), neck:by("J_Bip_C_Neck"), chest:by("J_Bip_C_Chest"), upperChest:by("J_Bip_C_UpperChest"), eyeL:by("J_Adj_L_FaceEye"), eyeR:by("J_Adj_R_FaceEye"), hand:by("J_Bip_L_Hand"), toeL:by("J_Bip_L_ToeBase"), toeR:by("J_Bip_R_ToeBase")};
+    actor.eyeQ0 = [actor.bones.eyeL.quaternion.clone(), actor.bones.eyeR.quaternion.clone()];   /* eyes are not animated: reset them every frame before aiming */
+    actor.mixer = new T.AnimationMixer(model);
+    actor.A = {}; for(const c of gltf.animations) actor.A[c.name] = actor.mixer.clipAction(c);
+    const A = actor.A;
     A.armHold.play(); A.idle.play(); A.walk.play(); A.walk.setEffectiveWeight(0);
     for(const k of ["wave", "touchHair", "lookAround"]){ A[k].setLoop(T.LoopOnce, 1); A[k].clampWhenFinished = true; }
-    girl.morph = ch.morph;
-    girl.mixer.update(0); model.updateMatrixWorld(true); ch.updateConstraints();
+    actor.morph = ch.morph;
+    actor.mixer.update(0); model.updateMatrixWorld(true); ch.updateConstraints();
     const rq = model.getWorldQuaternion(new T.Quaternion()), rqi = rq.clone().invert();
-    { const hq = girl.bones.head.getWorldQuaternion(new T.Quaternion()); girl.headFwd = v3(0, 0, 1).applyQuaternion(rq).applyQuaternion(hq.invert()); }
+    { const hq = actor.bones.head.getWorldQuaternion(new T.Quaternion()); actor.headFwd = v3(0, 0, 1).applyQuaternion(rq).applyQuaternion(hq.invert()); }
     /* tilt the holding hand so the fist's hole lines up with a shaft that leans back over her left shoulder */
-    { const hand = girl.bones.hand, hq = hand.getWorldQuaternion(new T.Quaternion()), pq = hand.parent.getWorldQuaternion(new T.Quaternion());
-      const fist = v3(...META.gripLocal.axis).applyQuaternion(hq).applyQuaternion(rqi).normalize(), want = v3(...CHAR.shaft).normalize();
+    { const hand = actor.bones.hand, hq = hand.getWorldQuaternion(new T.Quaternion()), pq = hand.parent.getWorldQuaternion(new T.Quaternion());
+      const fist = v3(...meta.gripLocal.axis).applyQuaternion(hq).applyQuaternion(rqi).normalize(), want = v3(...CHAR.shaft).normalize();
       const corr = new T.Quaternion().setFromUnitVectors(fist, want);
       const nw = rq.clone().multiply(corr).multiply(rqi).multiply(hq), nl = pq.invert().multiply(nw);
       const tr = A.armHold.getClip().tracks.find(t => t.name === "J_Bip_L_Hand.quaternion");
       if(tr){ for(let i=0;i<tr.values.length;i+=4){ tr.values[i] = nl.x; tr.values[i+1] = nl.y; tr.values[i+2] = nl.z; tr.values[i+3] = nl.w; } }
-      girl.mixer.update(0); model.updateMatrixWorld(true); ch.updateConstraints(); }
-    const U = makeUmbrella(ENV); girl.U = U;
-    U.umb.scale.setScalar(0.01); U.umb.position.fromArray(META.gripLocal.pos);
-    U.umb.quaternion.setFromUnitVectors(v3(0, 1, 0), v3(...META.gripLocal.axis).normalize()); U.umb.rotateY(-1.9);
-    girl.bones.hand.add(U.umb); model.updateMatrixWorld(true);
+      actor.mixer.update(0); model.updateMatrixWorld(true); ch.updateConstraints(); }
+    stage("umbrella");
+    const U = makeUmbrella(ENV); actor.U = U;
+    U.umb.scale.setScalar(0.01); U.umb.position.fromArray(meta.gripLocal.pos);
+    U.umb.quaternion.setFromUnitVectors(v3(0, 1, 0), v3(...meta.gripLocal.axis).normalize()); U.umb.rotateY(-1.9);
+    actor.bones.hand.add(U.umb); model.updateMatrixWorld(true);
     ch.resetSprings(); for(let i=0;i<40;i++) ch.updateSprings(1/60);
-    { const p = new T.Vector3(); girl.toe0 = [girl.bones.toeL, girl.bones.toeR].map(b => (b.getWorldPosition(p).y - girl.root.position.y)); }
-    girl.ready = true;
-  });
+    { const p = new T.Vector3(); actor.toe0 = [actor.bones.toeL, actor.bones.toeR].map(b => (b.getWorldPosition(p).y - actor.root.position.y)); }
+    const root=girl.root;
+    root.add(model);root.updateMatrixWorld(true);
+    Object.assign(girl,actor,{root,ready:true});
 }
 
 /* ---------- controllers ---------- */
@@ -1680,6 +1713,7 @@ const KEYK = 0.62, RIMK = 0.36;
 const st = {x:1.6, z:1.25, y:Y0, yaw:0.6, vx:0, vz:0, target:null, stuck:0, mvS:0, blink:2.5, splashT:0, gesture:null, gT:0, g:0, gNext:0, idleT:0, spinT:-1, joy:0, look:0, winkT:-1, sac:{t:1, x:0, y:0, cx:0, cy:0}, near:0, tilt:0, prevSpeed:0, prevYaw:0, toes:[{down:true}, {down:true}]};
 const keys = new Set();
 function resolve(p, R){
+  if(filmBus) filmBus.collide(p,R);
   p.x = Math.max(-3.9, Math.min(8.9, p.x)); p.z = Math.max(ZN + 0.1, Math.min(3.9, p.z));
   for(const c of dynCols){ const dx = p.x - c.x, dz = p.z - c.z, d2 = dx*dx + dz*dz, Rr = R + c.r; if(d2 < Rr*Rr && d2 > 1e-8){ const d = Math.sqrt(d2), k = (Rr - d)/d; p.x += dx*k; p.z += dz*k; } }
   for(let pass=0; pass<2; pass++) for(const c of colliders){
@@ -1693,6 +1727,7 @@ function resolve(p, R){
 }
 /* tap-to-walk routing between the front and the back lot: through the side alley or the west passage, whichever is shorter */
 function routeTo(x, z){
+  if(filmBus && window.walkRainStreet(st, {x,z}, colliders, filmBus)) return;
   const back = p => p.z < SZ0 - 0.02 && p.x > -1.55 && p.x < 4.35, me = {x: st.x, z: st.z}, goal = {x, z};
   let via = [];
   if(back(goal) !== back(me)){
@@ -1994,7 +2029,7 @@ const NPC_ACTS = {
 const NPC_ONCE = new Set(["n_wave", "n_yawn", "n_stretch"]);
 function loadNPCs(){
   if(!girl.src || !T.SkeletonUtils) return;
-  const tl = new T.TextureLoader();
+  const tl = new T.TextureLoader(assetLoader.manager(T,girl.assetPack));
   const ctx = {KEYU, anisotropy: Math.min(8, renderer.capabilities.getMaxAnisotropy()), hairA2C: girl.hairA2C, NOREF, HDR, texLoader: tl, outlineMask: girl.outlineMask};
   for(const kind of ["clerk", "courier"]){
     const b = buildNPC(T, girl.src, META, kind, ctx);
@@ -2146,7 +2181,14 @@ function updateCat(dt, t){
   const dGirl = Math.hypot(st.x - c.x, st.z - c.z), girlStill = Math.hypot(st.vx, st.vz) < 0.04;
   /* feeding time: go to the dish */
   if(t - c.call < 9 && c.state !== "eat" && c.state !== "toDish"){ c.state = "toDish"; c.target = {x: BACK.dish.x + 0.03, z: BACK.dish.z - 0.14}; }
-  if(c.state === "toDish" || c.state === "walk" || c.state === "toGirl"){
+  const listening=rainDetails?.listening&&girlStill&&dGirl<=1.13&&c.state!=="eat"&&c.state!=="toDish";
+  let turningPaws=false;
+  if(listening){
+    c.t-=dt;
+    const toward=Math.atan2(st.x-c.x,st.z-c.z),diff=Math.atan2(Math.sin(toward-c.yaw),Math.cos(toward-c.yaw));
+    c.yaw+=Math.max(-2.9*dt,Math.min(2.9*dt,diff*(1-Math.exp(-dt*5.7))));
+    turningPaws=Math.abs(diff)>.58;
+  }else if(c.state === "toDish" || c.state === "walk" || c.state === "toGirl"){
     const tg = c.state === "toGirl" ? {x: st.x + (c.x - st.x)/Math.max(dGirl, 1e-3)*0.3, z: st.z + (c.z - st.z)/Math.max(dGirl, 1e-3)*0.3} : c.target;
     const dx = tg.x - c.x, dz = tg.z - c.z, d = Math.hypot(dx, dz);
     if(d > 0.03){ const sp = c.state === "toDish" ? 0.42 : 0.28, k = Math.min(d, sp*dt); c.x += dx/d*k; c.z += dz/d*k; c.yaw = lerpAngle(c.yaw, Math.atan2(dx, dz), 1 - Math.exp(-dt*6)); }
@@ -2156,11 +2198,11 @@ function updateCat(dt, t){
     const s = BACK.catSpots[Math.floor(Math.random()*BACK.catSpots.length)]; c.target = {x: s.x + (Math.random() - 0.5)*0.2, z: s.z + (Math.random() - 0.5)*0.2}; c.state = "walk"; c.t = 0;
   }
   /* curious about her: comes over and sits looking up if she stays still nearby */
-  if(dGirl < 0.9 && girlStill && (c.state === "sit" || c.state === "groom" || c.state === "lie")){ c.lookT += dt; if(c.lookT > 1.6 && dGirl > 0.36){ c.state = "toGirl"; c.lookT = 0; } } else if(c.state !== "sitGirl") c.lookT = 0;
-  if(c.state === "sitGirl"){ c.yaw = lerpAngle(c.yaw, Math.atan2(st.x - c.x, st.z - c.z), 1 - Math.exp(-dt*3)); if(dGirl > 1.1 || c.t > 16){ c.state = "sit"; c.t = 0; c.dur = 3; } }
+  if(!listening&&dGirl < 0.9 && girlStill && (c.state === "sit" || c.state === "groom" || c.state === "lie")){ c.lookT += dt; if(c.lookT > 1.6 && dGirl > 0.36){ c.state = "toGirl"; c.lookT = 0; } } else if(!listening&&c.state !== "sitGirl") c.lookT = 0;
+  if(!listening&&c.state === "sitGirl"){ c.yaw = lerpAngle(c.yaw, Math.atan2(st.x - c.x, st.z - c.z), 1 - Math.exp(-dt*3)); if(dGirl > 1.1 || c.t > 16){ c.state = "sit"; c.t = 0; c.dur = 3; } }
   if(dGirl < 0.2 && !girlStill){ const ax = c.x - st.x, az = c.z - st.z, l = Math.max(Math.hypot(ax, az), 1e-3); c.target = {x: c.x + ax/l*0.5, z: c.z + az/l*0.5}; c.state = "walk"; c.t = 0; }
   /* pose */
-  const walking = c.state === "walk" || c.state === "toDish" || c.state === "toGirl", sitting = c.state === "sit" || c.state === "groom" || c.state === "sitGirl";
+  const walking = listening?turningPaws:(c.state === "walk" || c.state === "toDish" || c.state === "toGirl"), sitting = c.state === "sit" || c.state === "groom" || c.state === "sitGirl";
   const B = c.body, H = c.head, sw = Math.sin(c.ph*11);
   const want = {pitch: 0, y: 0.075, headX: 0, headY: 0};
   if(walking){ want.y = 0.075 + Math.abs(Math.sin(c.ph*11))*0.006; want.headX = 0.05*Math.sin(c.ph*11*2); }
@@ -2214,7 +2256,7 @@ function backPose(){
 }
 const backBtn = document.getElementById("back");
 function applyPose(p){ controls.target.copy(p.tgt); camera.position.copy(p.pos); if(p.dist) controls.maxDistance = Math.max(40, p.dist*1.25); controls.update(); }
-function setMode(m){ camMode = m; camBtn.textContent = m === "close" ? "全景" : "近景"; camBtn.setAttribute("aria-pressed", m === "close" ? "true" : "false");
+function setMode(m){ if(streetWalk) streetWalk.cancel(); camMode = m; camBtn.textContent = m === "close" ? "全景" : "近景"; camBtn.setAttribute("aria-pressed", m === "close" ? "true" : "false");
   backBtn.setAttribute("aria-pressed", m === "back" ? "true" : "false");
   const p = m === "close" ? closePose() : (m === "back" ? backPose() : fitPose()); tween = {t0:controls.target.clone(), p0:camera.position.clone(), t1:p.tgt, p1:p.pos, k:reduce ? 0.999 : 0}; }
 backBtn.addEventListener("click", () => { noteInteract(); setMode("back"); });
@@ -2227,7 +2269,7 @@ hintEl.textContent = "人物加载中…";
 let hintArmed = false;
 camBtn.addEventListener("click", () => { noteInteract(); setMode(camMode === "close" ? "full" : "close"); });
 const MOVE = new Set(["KeyW","KeyA","KeyS","KeyD","ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Space"]);
-window.addEventListener("keydown", e => { if(!MOVE.has(e.code) || (e.target === camBtn && e.code === "Space")) return; e.preventDefault(); noteInteract(); if(e.code === "Space"){ if(!e.repeat) gesture("wave"); } else keys.add(e.code); });
+window.addEventListener("keydown", e => { if(!MOVE.has(e.code) || (film && film.locksWalk) || (e.code === "Space" && e.target instanceof Element && e.target.closest("button"))) return; e.preventDefault(); noteInteract(); if(e.code === "Space"){ if(!e.repeat) playerGesture("wave"); } else keys.add(e.code); });
 window.addEventListener("keyup", e => keys.delete(e.code));
 window.addEventListener("blur", () => keys.clear());
 const ray = new T.Raycaster(), ndc = new T.Vector2(), groundPlane = new T.Plane(v3(0,1,0), -0.03), hit = new T.Vector3();
@@ -2238,8 +2280,11 @@ function endPointer(e){ activePointers = Math.max(0, activePointers - 1);
   if(e.type !== "pointerup" || d > 9 || dt > 400) return;
   const r = canvas.getBoundingClientRect(); ndc.set(((e.clientX - r.left)/r.width)*2 - 1, -((e.clientY - r.top)/r.height)*2 + 1);
   ray.setFromCamera(ndc, camera); noteInteract();
-  if(girl.ready && (ray.ray.distanceSqToPoint(v3(st.x, st.y + 0.45, st.z)) < 0.2*0.2 || ray.ray.distanceSqToPoint(v3(st.x, st.y + 0.75, st.z)) < 0.16*0.16)){ gesture(); return; }
-  if(ray.ray.intersectPlane(groundPlane, hit) && hit.x > -3.95 && hit.x < 8.95 && hit.z > ZN + 0.05 && hit.z < 3.95){ routeTo(hit.x, hit.z); }
+  if(film && film.hit(ray)) return;
+  if(film) film.cancelTravel();
+  if(streetWalk && streetWalk.hit(ray)) return;
+  if(girl.ready && (ray.ray.distanceSqToPoint(v3(st.x, st.y + 0.45, st.z)) < 0.2*0.2 || ray.ray.distanceSqToPoint(v3(st.x, st.y + 0.75, st.z)) < 0.16*0.16)){ playerGesture(); return; }
+  if(ray.ray.intersectPlane(groundPlane, hit) && hit.x > -3.95 && hit.x < 8.95 && hit.z > ZN + 0.05 && hit.z < 3.95){ if(streetWalk) streetWalk.cancel(); routeTo(hit.x, hit.z); }
 }
 canvas.addEventListener("pointerup", endPointer);
 canvas.addEventListener("pointercancel", endPointer);
@@ -2332,6 +2377,41 @@ function lowerQuality(){ level++;
   else if(level === 2){ pr = 1; refScale = 0.33; }
   else if(level === 3){ if(bloom) bloom.enabled = false; refScale = 0.25; }
   resize(); }
+const filmProps = window.createFilmStreetProps({THREE:T, scene});
+addCol(5.565, 1.00, 5.955, 1.24);
+filmBus = window.createNightBus({THREE:T, scene, renderer});
+rainDetails = optionalCharacterDetail("三花听声",()=>window.createRainDetails({THREE:T,girl,player:st,cat}));
+function playerGesture(name){
+  if(!girl.ready || st.target || keys.size)return;
+  const wave=(name || GESTS[gestI % GESTS.length])==="wave";
+  gesture(name);
+  if(wave && st.gesture==="wave")rainDetails?.greet();
+}
+film = window.createRainFilm({THREE:T, canvas, camera, controls, player:st, cat, keys, props:filmProps, bus:filmBus,
+  reduced:reduce, ready:() => girl.ready, getMode:() => camMode, setMode,
+  takeControl:() => { if(streetWalk) streetWalk.cancel(); tween = null; noteInteract(); },
+  routeToStop:goal => window.walkRainStreet(st, goal, colliders, filmBus, true)
+});
+const catNotice = window.createCatNotice(T,scene,groundY);
+const parkChime = window.createParkChime({THREE:T,scene,ripple,reduced:reduce});
+function standingRoom(point,r){
+  return !colliders.some(b=>{
+    const x=Math.max(b.x0,Math.min(b.x1,point.x)),z=Math.max(b.z0,Math.min(b.z1,point.z));
+    return (point.x-x)**2+(point.z-z)**2<r*r;
+  });
+}
+const streetSightline = new T.Ray(), streetEnd = new T.Vector3(), streetContact = new T.Vector3();
+const viewBlocks = BACK_OCC.map(b=>new T.Box3(v3(b[0],b[2],b[4]),v3(b[1],b[3],b[5])));
+function clearStreetView(from,to,skin=0){
+  const len=streetEnd.subVectors(to,from).length();
+  if(len<=skin)return true;
+  streetSightline.set(from,streetEnd.divideScalar(len));
+  return !viewBlocks.some(b=>streetSightline.intersectBox(b,streetContact)&&from.distanceTo(streetContact)<len-skin);
+}
+streetWalk=window.createStreetWalk({THREE:T,scene,camera,controls,canvas,player:st,cat,chime:parkChime,notice:catNotice,bus:filmBus,
+  reduced:reduce,keys,ready:()=>girl.ready,street:()=>!film.controlsCamera,getMode:()=>camMode,
+  interact:noteInteract,takeCamera:()=>{tween=null;noteInteract();},greet:()=>playerGesture("wave"),replies:()=>rainDetails?.replies||0,catHeard:()=>!!rainDetails?.responded,
+  route:(goal,boarding)=>window.walkRainStreet(st,goal,colliders,filmBus,boarding),clear:standingRoom,clearView:clearStreetView});
 const clock = new T.Clock(), fol = new T.Vector3();
 let flick = 0;
 function frame(){
@@ -2347,27 +2427,49 @@ function frame(){
   const on = !(flick < 0.07 && Math.random() < 0.5);
   neonLight.intensity = on ? 0.9 : 0.25; neonGlow.material.opacity = on ? 0.6 : 0.2; neonPool.material.opacity = on ? 0.34 : 0.12;
   updateGirl(dt, t); updateNPCs(dt, t); updateCat(dt, t); updateBackLight(dt);
+  if(rainDetails){
+    try{rainDetails.update(dt)}catch(e){optionalCharacterDetail("三花听声",()=>{throw e});rainDetails=null}
+  }
+  film.tick(dt,t); streetWalk.update(dt,t);
   if(reflector) reflector.material.uniforms.uTime.value = t;
   if(tween){ tween.k = Math.min(1, tween.k + dt/0.9); const k = tween.k, e = k < 0.5 ? 4*k*k*k : 1 - Math.pow(-2*k + 2, 3)/2;
     if(camMode === "close"){ tween.t1.set(st.x, st.y + 0.56, st.z); }
     controls.target.lerpVectors(tween.t0, tween.t1, e); camera.position.lerpVectors(tween.p0, tween.p1, e); if(k >= 1) tween = null; }
-  else {
+  else if(!film.controlsCamera && !streetWalk.framesView){
     const cd0 = camera.position.distanceTo(controls.target), fw = window.__noFollow ? 0 : (camMode === "close" ? 1 : Math.max(0, Math.min(1, (5.5 - cd0)/2)));
     const fh = 0.56 + 0.24*(1 - Math.max(0, Math.min(1, (cd0 - 0.55)/1.3)));
     if(fw > 0){ fol.set(st.x - controls.target.x, st.y + fh - controls.target.y, st.z - controls.target.z).multiplyScalar((1 - Math.exp(-dt*5))*fw); controls.target.add(fol); camera.position.add(fol); }
   }
   controls.update();
   const cd = camera.position.distanceTo(controls.target); scene.fog.near = cd + 2; scene.fog.far = cd + 26;
-  const pulled = camOcclusion(camMode === "close" || cd < 5);
+  const pulled = !film.controlsCamera && !streetWalk.framesView && camOcclusion(camMode === "close" || cd < 5);
   if(composer) composer.render(dt); else renderer.render(scene, camera);
+  film.afterRender();
   if(pulled) camera.position.copy(occSave);
   if(!hintArmed && girl.ready){ hintArmed = true; setTimeout(() => hintEl.classList.add("off"), 9000);
     setTimeout(() => { if(camMode === "back" || st.z < SZ0 - 0.2) return; hintEl.textContent = "店后面有人在卸货，还有一只猫 · 点左上「后门」看看"; hintEl.classList.remove("off"); setTimeout(() => hintEl.classList.add("off"), 6500); }, 10500); }
 }
+const retryCharacter=document.getElementById("character-retry");
+let characterStart=null;
+function characterStatus(state,failed=false){
+  retryCharacter.hidden=!failed;
+  if(state.phase==="ready")return;
+  hintEl.classList.remove("off");
+  hintEl.textContent=failed ? (assetLoader?.phases[state.phase]||"人物资源")+"未能载入，可以在这里重试。"
+    : state.attempt>1 ? "正在重新载入人物…" : "人物加载中…";
+}
+function startCharacter(){
+  if(characterStart||girl.ready)return;
+  retryCharacter.hidden=true;
+  characterStart=ensureCharacterLoader().then(()=>assetLoader.start(T,installGirl,characterStatus)).then(()=>{
+    assetLoader.optional("后场人物",loadNPCs);
+    hintEl.textContent=HINT;setTimeout(()=>{if(!interacted)setMode("close")},700);
+  }).catch(()=>{if(!assetLoader)characterStatus({phase:"asset"},true);retryCharacter.hidden=false}).finally(()=>{characterStart=null});
+}
+retryCharacter.addEventListener("click",startCharacter);
+startCharacter();
 frame();
-loadGirl().then(() => { try { loadNPCs(); } catch(e){ console.warn("npc", e); } hintEl.textContent = HINT; setTimeout(() => { if(!interacted) setMode("close"); }, 700); })
-  .catch(() => { hintEl.textContent = "人物没有加载成功，刷新页面再试一次"; });
-window.__diorama = {st, keys, setTarget:(x,z) => { routeTo(x, z); }, camera, controls, renderer, composer, bloom, girl, setMode, gesture, npcs, cat, BACK, simBack, simGirl, routeTo, finishTween:() => { if(tween) tween.k = 0.999; }, info:() => ({HDR, POST, level, pr, camMode, ready:girl.ready})};
+window.__diorama = {hairFinish:Object.freeze({get mode(){return hairFinish.mode},set:hairFinish.set,toggle:hairFinish.toggle}),streetWalk:Object.freeze({info:streetWalk.info}), get characterLoad(){return assetLoader?.state||{phase:"asset"}}, film, st, keys, setTarget:(x,z) => { routeTo(x, z); }, camera, controls, renderer, composer, bloom, girl, setMode, gesture, npcs, cat, BACK, simBack, simGirl, routeTo, finishTween:() => { if(tween) tween.k = 0.999; }, info:() => ({HDR, POST, level, pr, camMode, ready:girl.ready})};
 })();
 </script>
 
